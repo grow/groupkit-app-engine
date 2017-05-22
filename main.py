@@ -1,0 +1,132 @@
+from google.appengine.ext import ndb
+from google.auth import app_engine
+from googleapiclient import discovery
+from googleapiclient import errors
+from oauth2client import client
+import flask
+import google.auth
+import json
+import logging
+import os
+import requests_oauthlib
+
+SCOPE = [
+    'https://www.googleapis.com/auth/drive.readonly.metadata',
+    'https://www.googleapis.com/auth/userinfo.email',
+]
+
+CLIENT_SECRETS = json.load(open('client_secrets.json'))
+CLIENT_ID = CLIENT_SECRETS['web']['client_id']
+CLIENT_SECRET = CLIENT_SECRETS['web']['client_secret']
+AUTH_BASE_URL  = CLIENT_SECRETS['web']['auth_uri']
+TOKEN_URL = CLIENT_SECRETS['web']['token_uri']
+
+_scheme = os.environ['wsgi.url_scheme']
+_host = os.environ['HTTP_HOST']
+REDIRECT_URI = '{}://{}/oauth2callback'.format(_scheme, _host)
+USER_AGENT = 'groupkit-app-engine/0.1'
+
+app = flask.Flask(__name__)
+app.secret_key = os.urandom(24)
+
+
+class GroupFile(ndb.Model):
+    file_id = ndb.StringProperty()
+    group_email = ndb.StringProperty()
+
+    @classmethod
+    def get(cls, group_email):
+        key = ndb.Key('GroupFile', group_email)
+        return key.get() or cls(key=key, group_email=group_email)
+
+
+def get_user_info(credentials):
+    service = discovery.build('oauth2', 'v2', credentials=credentials)
+    return service.userinfo().v2().me().get().execute()
+
+
+def is_user_in_group(user_email, group_email, credentials):
+    file_id = get_file_id_for_group(group_email)
+    service = discovery.build('drive', 'v3', credentials=credentials)
+    req = service.files().get(fileId=file_id)
+    try:
+        resp = req.execute()
+        return True
+    except errors.HttpError as e:
+        if e.resp.status == 404:
+            return False
+        raise
+
+
+def get_file_id_for_group(group_email):
+    group_file = GroupFile.get(group_email)
+    if group_file.file_id is not None:
+        return group_file.file_id
+    app_credentials = client.GoogleCredentials.get_application_default()
+    scope = 'https://www.googleapis.com/auth/drive.file'
+    app_credentials = app_credentials.create_scoped(scope)
+    service = discovery.build('drive', 'v3', credentials=app_credentials)
+    body = {'name': 'Groupkit: {}'.format(group_email)}
+    req = service.files().create(body=body)
+    resp = req.execute()
+    file_id = resp['id']
+    permission = {
+	'type': 'group',
+        'role': 'reader',
+        'emailAddress': group_email,
+    }
+    req = service.permissions().create(fileId=file_id, body=permission)
+    resp = req.execute()
+    group_file.file_id = file_id
+    group_file.put()
+    return file_id
+
+
+def get_token_from_environment():
+    if os.getenv('SERVER_SOFTWARE', '').startswith('Dev'):
+        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = True
+    state = flask.session['oauth_state']
+    url = flask.request.url
+    google = requests_oauthlib.OAuth2Session(
+            CLIENT_ID, scope=SCOPE, redirect_uri=REDIRECT_URI)
+    code = flask.request.args.get('code')
+    return google.fetch_token(
+            TOKEN_URL, client_secret=CLIENT_SECRET,
+            code=code)
+
+
+@app.route('/oauth2callback', methods=['GET'])
+def callback():
+    token = get_token_from_environment()
+    flask.session['oauth_token'] = token
+    return flask.redirect(flask.session['oauth_callback_redirect'])
+
+
+@app.route('/check')
+def login():
+    group_email = flask.request.args.get('group')
+    flask.session['group_email'] = group_email
+    if 'oauth_token' not in flask.session:
+        google = requests_oauthlib.OAuth2Session(
+                CLIENT_ID, scope=SCOPE, redirect_uri=REDIRECT_URI)
+        authorization_url, state = google.authorization_url(
+                AUTH_BASE_URL, approval_prompt='auto')  # auto, force
+        flask.session['oauth_callback_redirect'] = flask.request.url
+        flask.session['oauth_state'] = state
+        return flask.redirect(authorization_url)
+    token = flask.session['oauth_token']
+    access_token = token['access_token']
+    credentials = client.AccessTokenCredentials(access_token, USER_AGENT)
+    user_info = get_user_info(credentials)
+    email = user_info['email']
+    group = flask.session['group_email']
+    result = is_user_in_group(email, group, credentials)
+    content = 'Is {} in {}? -> {}'.format(email, group, result)
+    resp = flask.Response(content)
+    resp.headers['Content-Type'] = 'text/plain'
+    return resp
+
+
+@app.route('/')
+def home():
+    return 'OK'

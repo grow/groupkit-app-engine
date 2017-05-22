@@ -1,0 +1,10 @@
+*.pem
+*.pyc
+.DS_Store
+.coverage
+build
+client_secrets.json
+dist
+env
+htmlcov
+lib

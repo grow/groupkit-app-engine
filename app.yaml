@@ -11,7 +11,7 @@ libraries:
 
 handlers:
 - url: .*
-  script: main.app
+  script: groupkit.main.app
   secure: always
 
 skip_files:

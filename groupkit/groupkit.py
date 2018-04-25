@@ -30,9 +30,6 @@ USER_AGENT = 'groupkit-app-engine/0.1'
 # Arbitrary page size.
 GROUPS_API = 'https://discussion.googleapis.com/v1/groups?page_size=10000'
 
-app = flask.Flask(__name__)
-app.secret_key = os.urandom(24)
-
 
 class GroupFile(ndb.Model):
     file_id = ndb.StringProperty()
@@ -112,40 +109,3 @@ def get_token_from_environment():
     return google.fetch_token(
             TOKEN_URL, client_secret=CLIENT_SECRET,
             code=code)
-
-
-@app.route('/oauth2callback', methods=['GET'])
-def callback():
-    token = get_token_from_environment()
-    flask.session['oauth_token'] = token
-    return flask.redirect(flask.session['oauth_callback_redirect'])
-
-
-@app.route('/check')
-def login():
-    group_email = flask.request.args.get('group')
-    flask.session['group_email'] = group_email
-    if 'oauth_token' not in flask.session:
-        google = requests_oauthlib.OAuth2Session(
-                CLIENT_ID, scope=SCOPE, redirect_uri=REDIRECT_URI)
-        authorization_url, state = google.authorization_url(
-                AUTH_BASE_URL, approval_prompt='auto')  # auto, force
-        flask.session['oauth_callback_redirect'] = flask.request.url
-        flask.session['oauth_state'] = state
-        return flask.redirect(authorization_url)
-    token = flask.session['oauth_token']
-    access_token = token['access_token']
-    credentials = client.AccessTokenCredentials(access_token, USER_AGENT)
-    user_info = get_user_info(credentials)
-    email = user_info['email']
-    group = flask.session['group_email']
-    result = is_user_in_group(email, group, credentials)
-    content = 'Is {} in {}? -> {}'.format(email, group, result)
-    resp = flask.Response(content)
-    resp.headers['Content-Type'] = 'text/plain'
-    return resp
-
-
-@app.route('/')
-def home():
-    return 'OK'

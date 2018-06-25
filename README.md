@@ -24,3 +24,10 @@ group_email = 'group@example.com'
 
 groupkit.is_user_in_group(user_email, group_email, credentials)
 ```
+
+## Requirements
+
+In order to check if a user is a member of a group, the group must allow members
+to `View Members` and `View email addresses`.  These settings can be found under
+`Manage` > `Permissions` > `Access Permissions` and should be set to `All
+members of the group`.

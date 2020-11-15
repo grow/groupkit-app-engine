@@ -22,10 +22,9 @@ CLIENT_SECRET = CLIENT_SECRETS['web']['client_secret']
 AUTH_BASE_URL  = CLIENT_SECRETS['web']['auth_uri']
 TOKEN_URL = CLIENT_SECRETS['web']['token_uri']
 
-_scheme = os.environ['wsgi.url_scheme']
-_host = os.environ['HTTP_HOST']
-REDIRECT_URI = '{}://{}/oauth2callback'.format(_scheme, _host)
 USER_AGENT = 'groupkit-app-engine/0.1'
+
+REDIRECT_URI_PATH = '/oauth2callback'
 
 # Arbitrary page size.
 GROUPS_API = 'https://discussion.googleapis.com/v1/groups?page_size=10000'
@@ -99,12 +98,15 @@ def get_file_id_for_group(group_email):
 
 
 def get_token_from_environment():
+    scheme = os.environ['wsgi.url_scheme']
+    host = os.environ['HTTP_HOST']
+    redirect_uri = '{}://{}{}'.format(scheme, host, REDIRECT_URI_PATH)
     if os.getenv('SERVER_SOFTWARE', '').startswith('Dev'):
         os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = True
     state = flask.session['oauth_state']
     url = flask.request.url
     google = requests_oauthlib.OAuth2Session(
-            CLIENT_ID, scope=SCOPE, redirect_uri=REDIRECT_URI)
+            CLIENT_ID, scope=SCOPE, redirect_uri=redirect_uri)
     code = flask.request.args.get('code')
     return google.fetch_token(
             TOKEN_URL, client_secret=CLIENT_SECRET,

@@ -19,7 +19,7 @@ import groupkit
 
 # Must be a user whose credentials we already have.
 credentials = <credentials>
-user_email = 'user@example.com'  
+user_email = 'user@example.com'
 group_email = 'group@example.com'
 
 groupkit.is_user_in_group(user_email, group_email, credentials)

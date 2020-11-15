@@ -17,7 +17,6 @@ CLIENT_ID = groupkit.CLIENT_ID
 CLIENT_SECRET = groupkit.CLIENT_SECRET
 AUTH_BASE_URL = groupkit.AUTH_BASE_URL
 TOKEN_URL = groupkit.TOKEN_URL
-REDIRECT_URI = groupkit.REDIRECT_URI
 USER_AGENT = groupkit.USER_AGENT
 
 
@@ -33,8 +32,11 @@ def login():
     group_email = flask.request.args.get('group')
     flask.session['group_email'] = group_email
     if 'oauth_token' not in flask.session:
+        scheme = os.environ['wsgi.url_scheme']
+        host = os.environ['HTTP_HOST']
+        redirect_uri = '{}://{}{}'.format(scheme, host, groupkit.REDIRECT_URI_PATH)
         google = requests_oauthlib.OAuth2Session(
-                CLIENT_ID, scope=SCOPE, redirect_uri=REDIRECT_URI)
+                CLIENT_ID, scope=SCOPE, redirect_uri=redirect_uri)
         authorization_url, state = google.authorization_url(
                 AUTH_BASE_URL, approval_prompt='auto')  # auto, force
         flask.session['oauth_callback_redirect'] = flask.request.url

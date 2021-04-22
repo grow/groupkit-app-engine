@@ -1,5 +1,4 @@
 from google.cloud import ndb
-from google.auth import app_engine
 from googleapiclient import discovery
 from googleapiclient import errors
 from oauth2client import client

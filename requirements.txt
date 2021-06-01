@@ -3,5 +3,5 @@ google-api-python-client==1.6.2
 google-auth==1.0.1
 google-cloud-ndb
 requests-oauthlib==0.8.0
-urllib3==1.21.1
+urllib3==1.26.5
 grpcio

@@ -1,4 +1,4 @@
-flask==0.12.2
+flask==1.0
 google-api-python-client==1.6.2
 google-auth==1.0.1
 google-cloud-ndb
